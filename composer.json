@@ -1,0 +1,25 @@
+{
+    "name": "ugurakcil/voyager-booster",
+    "description": "A Laravel package that includes Laravel-Voyager bugfixes and enhancements",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Uğur AKÇIL",
+            "email": "ugurakcil@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {},
+    "extra": {
+      "laravel": {
+        "providers": [
+           "UgurAkcil\\VoyagerBooster\\VoyagerBoosterProvider"
+        ]
+      }
+    },
+    "autoload": {
+        "psr-4": {
+           "UgurAkcil\\VoyagerBooster\\": "src/"
+        }
+    }
+}

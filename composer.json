@@ -1,6 +1,7 @@
 {
     "name": "ugurakcil/voyager-booster",
     "description": "A Laravel package that includes Laravel-Voyager bugfixes and enhancements",
+    "type": "library",
     "license": "MIT",
     "authors": [
         {
@@ -8,8 +9,22 @@
             "email": "ugurakcil@gmail.com"
         }
     ],
+    "keywords": [
+        "booster",
+        "laravel",
+        "package",
+        "voyager",
+        "crm",
+        "admin"
+    ],
+    "require": {
+        "php": "^7.1",
+        "psr/container": "^1.0"
+    },
+    "require-dev": {
+        "laravel/framework": "^5.0"
+    },
     "minimum-stability": "dev",
-    "require": {},
     "extra": {
       "laravel": {
         "providers": [

@@ -28,7 +28,7 @@
     "extra": {
       "laravel": {
         "providers": [
-           "UgurAkcil\\VoyagerBooster\\VoyagerBoosterProvider"
+           "UgurAkcil\\VoyagerBooster\\VoyagerBoosterServiceProvider"
         ]
       }
     },

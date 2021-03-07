@@ -1,7 +1,7 @@
 <?php
 namespace App\Traits;
 
-use App\Models\VogerBlog\Visit;
+use App\Models\Visit;
 use Carbon\Carbon;
 
 trait Visitable

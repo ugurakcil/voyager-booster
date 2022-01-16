@@ -17,6 +17,10 @@ class Locale
      */
     public function handle($request, Closure $next)
     {
+        if(array_key_exists(request()->segment(1), Config::get('app.available_locales'))) {
+            session(['locale' => request()->segment(1)]);
+        }
+
         if(Session::has('locale')) {
             app()->setLocale(Session::get('locale'));
             Carbon::setLocale(Session::get('locale'));
@@ -26,6 +30,8 @@ class Locale
 
         setlocale(LC_TIME, app()->getLocale().'_'.mb_strtoupper(app()->getLocale()).'.utf8');
 
+        URL::defaults(['lang' => app()->getLocale()]);
+        
         return $next($request);
     }
 }

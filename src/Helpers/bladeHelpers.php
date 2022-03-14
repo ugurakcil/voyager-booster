@@ -38,3 +38,20 @@ if(! function_exists('afterImageName')) {
         return preg_replace('/(.*?)\.(jpg|png|gif|JPG|PNG|GIF|jpeg|JPEG)/', '$1-'.$append.'.$2', $filename);
     }
 }
+
+if(! function_exists('strupper')) {
+    function strupper($text){
+        if(app()->getLocale() == 'tr')
+            $text = str_replace('i','İ',$text);
+
+        return mb_convert_case($text, MB_CASE_UPPER, "UTF-8");
+    }
+}
+if(! function_exists('strlower')) {
+    function strlower($text){
+        if(app()->getLocale() == 'tr')
+            $text = str_replace('İ','i',$text);
+
+        return mb_convert_case($text, MB_CASE_LOWER, "UTF-8");
+    }
+}

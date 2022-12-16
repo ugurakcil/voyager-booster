@@ -1,0 +1,40 @@
+{
+    "name": "ugurakcil/voyager-booster",
+    "description": "A Laravel package that includes Laravel-Voyager bugfixes and enhancements",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Uğur AKÇIL",
+            "email": "ugurakcil@gmail.com"
+        }
+    ],
+    "keywords": [
+        "booster",
+        "laravel",
+        "package",
+        "voyager",
+        "crm",
+        "admin"
+    ],
+    "require": {
+        "php": "^5.5 || ^7.0 || ^8.0",
+        "tcg/voyager":"^1.5"
+    },
+    "require-dev": {
+        "laravel/framework": "~6.0|~7.0|~8.0|~9.0"
+    },
+    "minimum-stability": "dev",
+    "extra": {
+      "laravel": {
+        "providers": [
+           "UgurAkcil\\VoyagerBooster\\VoyagerBoosterServiceProvider"
+        ]
+      }
+    },
+    "autoload": {
+        "psr-4": {
+           "UgurAkcil\\VoyagerBooster\\": "src/"
+        }
+    }
+}

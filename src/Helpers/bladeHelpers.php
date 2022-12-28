@@ -11,7 +11,7 @@ if (!function_exists('localizedDate')) {
     function localizedDate($date, $format)
     {
         $newDate = new Carbon\Carbon;
-        echo $newDate::parse($date)->formatLocalized($format);
+        echo $newDate->isoFormat('D MMMM YYYY dddd');
     }
 }
 

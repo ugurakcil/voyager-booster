@@ -24,7 +24,7 @@ class NewsPostCounter extends BaseDimmer
     public function run()
     {
         $count = NewsPost::count();
-        $string = trans_choice('dimmer.news_post', $count);
+        $string = trans_choice('generic.news_post', $count);
 
         return view('voyager::dimmer', array_merge($this->config, [
             'icon'   => 'voyager-news',

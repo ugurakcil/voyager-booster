@@ -24,14 +24,14 @@ class PageCounter extends BaseDimmer
     public function run()
     {
         $count = Page::count();
-        $string = trans_choice('dimmer.page', $count);
+        $string = trans_choice('generic.page', $count);
 
         return view('voyager::dimmer', array_merge($this->config, [
             'icon'   => 'voyager-file-text',
             'title'  => "{$count} {$string}",
-            'text'   => __('dimmer.page_text', ['count' => $count, 'string' => Str::lower($string)]),
+            'text'   => __('generic.page_text', ['count' => $count, 'string' => Str::lower($string)]),
             'button' => [
-                'text' => __('dimmer.page_link_text'),
+                'text' => __('generic.page_link_text'),
                 'link' => route('voyager.pages.index'),
             ],
             'image' => voyager_asset('images/widget-backgrounds/03.jpg'),

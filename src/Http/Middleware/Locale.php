@@ -17,21 +17,24 @@ class Locale
      */
     public function handle($request, Closure $next)
     {
+
+        /*
+        * If the first segment is not a language code
+        * then set the default locale.
+        */
         if(array_key_exists(request()->segment(1), \Config::get('app.available_locales'))) {
-            session(['locale' => request()->segment(1)]);
-        }
-
-        if(Session::has('locale')) {
-            app()->setLocale(Session::get('locale'));
-            Carbon::setLocale(Session::get('locale'));
+            $locale = request()->segment(1);
         } else {
-            Carbon::setLocale(app()->getLocale());
+            $locale = array_key_first(\Config::get('app.available_locales'));
         }
 
-        setlocale(LC_TIME, app()->getLocale().'_'.mb_strtoupper(app()->getLocale()).'.utf8');
+        app()->setLocale($locale);
+        Carbon::setLocale($locale);
 
-        \URL::defaults(['lang' => app()->getLocale()]);
-        
+        setlocale(LC_TIME, $locale.'_'.mb_strtoupper(app()->getLocale()).'.utf8');
+
+        \URL::defaults(['lang' => $locale]);
+
         return $next($request);
     }
 }

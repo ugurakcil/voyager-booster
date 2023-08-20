@@ -1,30 +1,19 @@
 <?php
 if (!function_exists('localizedDate')) {
-    /**
-     * Format number
-     *
-     * @param $value
-     * @param $attribute
-     * @param $data
-     * @return boolean
-     */
-    function localizedDate($date, $format)
-    {
+    function localizedDate($date, $format) {
         $newDate = new Carbon\Carbon;
         echo $newDate->isoFormat('D MMMM YYYY dddd');
     }
 }
 
 if (!function_exists('helperCheck')) {
-    function helperCheck()
-    {
+    function helperCheck() {
         return 'Helpers working';
     }
 }
 
 if (!function_exists('hasCategoryInArray')) {
-    function hasCategoryInArray($records, $categoryField, $exceptedValue)
-    {
+    function hasCategoryInArray($records, $categoryField, $exceptedValue) {
         foreach ($records as $record) {
             if ($record[$categoryField] == $exceptedValue) {
                 return true;
@@ -36,9 +25,12 @@ if (!function_exists('hasCategoryInArray')) {
 }
 
 if (!function_exists('afterImageName')) {
-    function afterImageName($filename, $append)
-    {
-        return preg_replace('/(.*?)\.(jpg|png|gif|JPG|PNG|GIF|jpeg|JPEG)/', '$1-' . $append . '.$2', $filename);
+    function afterImageName($filename, $append) {
+        return preg_replace(
+            '/(.*?)\.(jpg|png|gif|JPG|PNG|GIF|jpeg|JPEG|webp|WEBP)/',
+            '$1-' . $append . '.$2',
+            $filename
+        );
     }
 }
 
@@ -99,11 +91,16 @@ if (!function_exists('phoneNumberFormat')) {
     {
         if($lang == 'ar') {
             // The direction of the text is distorted as it goes from number to text. Don't format it!
-            // $formattedPhoneNumber = preg_replace('~(.*)([\p{Arabic}]{3})[^\p{Arabic}]{0,7}([\p{Arabic}]{3})[^\p{Arabic}]{0,7}([\p{Arabic}]{4}).*~', '$1$2$3$4', $phoneNumber);
+            // $formattedPhoneNumber = preg_replace('~(.*)([\p{Arabic}]{3})[^\p{Arabic}]{0,7}
+            //([\p{Arabic}]{3})[^\p{Arabic}]{0,7}([\p{Arabic}]{4}).*~', '$1$2$3$4', $phoneNumber);
 
             return $phoneNumber . "\n";
         } else {
-            return preg_replace('~(.*)(\d{3})[^\d]{0,7}(\d{3})[^\d]{0,7}(\d{4}).*~', '$1 ($2) $3-$4', $phoneNumber) . "\n";
+            return preg_replace(
+                '~(.*)(\d{3})[^\d]{0,7}(\d{3})[^\d]{0,7}(\d{4}).*~',
+                '$1 ($2) $3-$4',
+                $phoneNumber
+            ) . "\n";
         }
     }
 }
@@ -115,4 +112,23 @@ if (!function_exists('localizatedPhoneNumberFormat')) {
         return phoneNumberFormat($localizatedPhoneNumber, $to);
     }
 }
+
+if (!function_exists('bulkListExplode')) {
+    function bulkListExplode($bulkListRaw)
+    {
+        $bulkListSeries = [];
+
+        $bulkListRaw = rtrim($bulkListRaw, '¶¶¶');
+        $bulkListFirstLevel = explode('¶¶¶', $bulkListRaw);
+
+
+        foreach($bulkListFirstLevel as $bulkListFirstLevelLine) {
+            $line = explode('ßßß', $bulkListFirstLevelLine);
+            $bulkListSeries[] = [$line[0] => $line[1]];
+        }
+
+        return $bulkListSeries;
+    }
+}
+
 

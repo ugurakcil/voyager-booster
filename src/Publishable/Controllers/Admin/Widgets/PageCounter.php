@@ -2,11 +2,7 @@
 
 namespace App\Http\Controllers\Admin\Widgets;
 
-<<<<<<< HEAD
-use App\Models\VogerBlog\Page;
-=======
-use App\Page;
->>>>>>> d4c455dbc30ea73bda11048bb784b839a8741c9d
+use App\Models\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use TCG\Voyager\Facades\Voyager;

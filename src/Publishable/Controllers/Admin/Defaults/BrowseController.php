@@ -16,6 +16,9 @@ use TCG\Voyager\Events\BreadImagesDeleted;
 use TCG\Voyager\Facades\Voyager;
 use TCG\Voyager\Http\Controllers\Traits\BreadRelationshipParser;
 
+use Validator;
+use Illuminate\Http\UploadedFile;
+
 class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseController
 {
     use BreadRelationshipParser;
@@ -32,6 +35,81 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
     //
     //****************************************
 
+    /**
+     * Validates bread POST request.
+     *
+     * @param array  $data The data
+     * @param array  $rows The rows
+     * @param string $slug Slug
+     * @param int    $id   Id of the record to update
+     *
+     * @return mixed
+     */
+    public function validateBread($data, $rows, $name = null, $id = null)
+    {
+        $rules = [];
+        $messages = [];
+        $customAttributes = [];
+        $is_update = $name && $id;
+
+        $fieldsWithValidationRules = $this->getFieldsWithValidationRules($rows);
+
+        foreach ($fieldsWithValidationRules as $field) {
+            $fieldRules = $field->details->validation->rule;
+            $fieldName = $field->field;
+
+            // Show the field's display name on the error message
+            if (!empty($field->display_name)) {
+                if (!empty($data[$fieldName]) && is_array($data[$fieldName])) {
+                    foreach ($data[$fieldName] as $index => $element) {
+                        if ($element instanceof UploadedFile) {
+                            $name = $element->getClientOriginalName();
+                        } else {
+                            $name = $index + 1;
+                        }
+
+                        $customAttributes[$fieldName.'.'.$index] = $field->getTranslatedAttribute('display_name').' '.$name;
+                    }
+                } else {
+                    $customAttributes[$fieldName] = $field->getTranslatedAttribute('display_name');
+                }
+            }
+
+            // If field is an array apply rules to all array elements
+            $fieldName = !empty($data[$fieldName]) && is_array($data[$fieldName]) ? $fieldName.'.*' : $fieldName;
+
+            // Get the rules for the current field whatever the format it is in
+            $rules[$fieldName] = is_array($fieldRules) ? $fieldRules : explode('|', $fieldRules);
+
+            if ($id && property_exists($field->details->validation, 'edit')) {
+                $action_rules = $field->details->validation->edit->rule;
+                $rules[$fieldName] = array_merge($rules[$fieldName], (is_array($action_rules) ? $action_rules : explode('|', $action_rules)));
+            } elseif (!$id && property_exists($field->details->validation, 'add')) {
+                $action_rules = $field->details->validation->add->rule;
+                $rules[$fieldName] = array_merge($rules[$fieldName], (is_array($action_rules) ? $action_rules : explode('|', $action_rules)));
+            }
+            // Fix Unique validation rule on Edit Mode
+            if ($is_update) {
+                foreach ($rules[$fieldName] as &$fieldRule) {
+                    if (strpos(strtoupper($fieldRule), 'UNIQUE') !== false) {
+                        $fieldRule = \Illuminate\Validation\Rule::unique($name)->ignore($id);
+                    }
+                }
+            }
+
+            // Set custom validation messages if any
+            if (!empty($field->details->validation->messages)) {
+                foreach ($field->details->validation->messages as $key => $msg) {
+                    $messages["{$field->field}.{$key}"] = $msg;
+                }
+            }
+        }
+
+        //dd(Validator::make($data, $rules, $messages, $customAttributes)->errors());
+
+        return Validator::make($data, $rules, $messages, $customAttributes);
+    }
+
     public function index(Request $request)
     {
         // GET THE SLUG, ex. 'posts', 'pages', etc.
@@ -43,34 +121,15 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
         // Check permission
         $this->authorize('browse', app($dataType->model_name));
 
-        if (strlen($dataType->model_name) != 0) {
-            $model = app($dataType->model_name);
-        } else {
-            $model = false;
-        }
-
         $getter = $dataType->server_side ? 'paginate' : 'get';
 
         $search = (object) ['value' => $request->get('s'), 'key' => $request->get('key'), 'filter' => $request->get('filter')];
 
         $searchNames = [];
         if ($dataType->server_side) {
-
-            if(isset($model->searchable)){
-                $searchable = $model->searchable;
-            } else {
-                $searchable = SchemaManager::describeTable(app($dataType->model_name)->getTable())->pluck('name')->toArray();
-            }
-
-            $dataRow = Voyager::model('DataRow')->whereDataTypeId($dataType->id)->get();
-            foreach ($searchable as $key => $value) {
-                $field = $dataRow->where('field', $value)->first();
-                $displayName = ucwords(str_replace('_', ' ', $value));
-                if ($field !== null) {
-                    $displayName = $field->getTranslatedAttribute('display_name');
-                }
-                $searchNames[$value] = $displayName;
-            }
+            $searchNames = $dataType->browseRows->mapWithKeys(function ($row) {
+                return [$row['field'] => $row->getTranslatedAttribute('display_name')];
+            });
         }
 
         $orderBy = $request->get('order_by', $dataType->order_column);
@@ -79,21 +138,22 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
         $showSoftDeleted = false;
 
         // Next Get or Paginate the actual content from the MODEL that corresponds to the slug DataType
-        if ($model) {
-            // DEX: List status
-            $contentTypes = [];
-            if(isset($model->contentTypes)){
-                $contentTypes = $model->contentTypes;
-            }
+        if (strlen($dataType->model_name) != 0) {
+            $model = app($dataType->model_name);
 
-            if ($request->has('contentType') && is_numeric($request->get('contentType'))) {
-                $contentTypeKey = $request->get('contentType');
-                $contentTypes['selected'] = $contentTypeKey;
-                $query = $model->contentType($contentTypeKey);
+            $contentTypes = []; // DATASINS: List status
+            if(isset($model->contentTypes)){ // DATASINS: List status
+                $contentTypes = $model->contentTypes; // DATASINS: List status
+            } // DATASINS: List status
+
+            $query = $model::select($dataType->name.'.*');
+
+            if ($request->has('contentType') && is_numeric($request->get('contentType'))) { // DATASINS: List status
+                $contentTypeKey = $request->get('contentType'); // DATASINS: List status
+                $contentTypes['selected'] = $contentTypeKey; // DATASINS: List status
+                $query = $model->contentType($contentTypeKey); // DATASINS: List status
             } else if ($dataType->scope && $dataType->scope != '' && method_exists($model, 'scope'.ucfirst($dataType->scope))) {
-                $query = $model->{$dataType->scope}();
-            } else {
-                $query = $model::select('*');
+                $query->{$dataType->scope}();
             }
 
             // Use withTrashed() if model uses SoftDeletes and if toggle is selected
@@ -110,25 +170,36 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
             $this->removeRelationshipField($dataType, 'browse');
 
             if ($search->value != '' && $search->key && $search->filter) {
-                if($search->filter == 'equal') {
-                    $search_filter = '=';
-                    $search_value = $search->value;
-                } else if($search->filter == 'notequal') {
-                    $search_filter = '!=';
-                    $search_value = $search->value;
-                } else if($search->filter == 'contain') {
-                    $search_filter = 'LIKE';
-                    $search_value = '%'.$search->value.'%';
-                } else if($search->filter == 'notcontain') {
-                    $search_filter = 'NOT LIKE';
-                    $search_value = '%'.$search->value.'%';
+                $search_filter = ($search->filter == 'equals') ? '=' : 'LIKE';
+                $search_value = ($search->filter == 'equals') ? $search->value : '%'.$search->value.'%';
+
+                $searchField = $dataType->name.'.'.$search->key;
+                if ($row = $this->findSearchableRelationshipRow($dataType->rows->where('type', 'relationship'), $search->key)) {
+                    $query->whereIn(
+                        $searchField,
+                        $row->details->model::where($row->details->label, $search_filter, $search_value)->pluck('id')->toArray()
+                    );
+                } else {
+                    if ($dataType->browseRows->pluck('field')->contains($search->key)) {
+                        $query->where($searchField, $search_filter, $search_value);
+                    }
+                }
                 }
 
-                $query->where($search->key, $search_filter, $search_value);
+            $row = $dataType->rows->where('field', $orderBy)->firstWhere('type', 'relationship');
+            if ($orderBy && (in_array($orderBy, $dataType->fields()) || !empty($row))) {
+                $querySortOrder = (!empty($sortOrder)) ? $sortOrder : 'desc';
+                if (!empty($row)) {
+                    $query->select([
+                        $dataType->name.'.*',
+                        'joined.'.$row->details->label.' as '.$orderBy,
+                    ])->leftJoin(
+                        $row->details->table.' as joined',
+                        $dataType->name.'.'.$row->details->column,
+                        'joined.'.$row->details->key
+                    );
             }
 
-            if ($orderBy && in_array($orderBy, $dataType->fields())) {
-                $querySortOrder = (!empty($sortOrder)) ? $sortOrder : 'desc';
                 $dataTypeContent = call_user_func([
                     $query->orderBy($orderBy, $querySortOrder),
                     $getter,
@@ -144,6 +215,7 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
         } else {
             // If Model doesn't exist, get data from table name
             $dataTypeContent = call_user_func([DB::table($dataType->name), $getter]);
+            $model = false;
         }
 
         // Check if BREAD is Translatable
@@ -189,6 +261,9 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
             $orderColumn = [[$index, $sortOrder ?? 'desc']];
         }
 
+        // Define list of columns that can be sorted server side
+        $sortableColumns = $this->getSortableColumns($dataType->browseRows);
+
         $view = 'voyager::bread.browse';
 
         if (view()->exists("voyager::$slug.browse")) {
@@ -203,6 +278,7 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
             'search',
             'orderBy',
             'orderColumn',
+            'sortableColumns',
             'sortOrder',
             'searchNames',
             'isServerSide',
@@ -210,7 +286,7 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
             'usesSoftDeletes',
             'showSoftDeleted',
             'showCheckboxColumn',
-            'contentTypes'
+            'contentTypes' // DATASINS: checking Content Types
         ));
     }
 
@@ -236,15 +312,16 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
 
         if (strlen($dataType->model_name) != 0) {
             $model = app($dataType->model_name);
+            $query = $model->query();
 
             // Use withTrashed() if model uses SoftDeletes and if toggle is selected
             if ($model && in_array(SoftDeletes::class, class_uses_recursive($model))) {
-                $model = $model->withTrashed();
+                $query = $query->withTrashed();
             }
             if ($dataType->scope && $dataType->scope != '' && method_exists($model, 'scope'.ucfirst($dataType->scope))) {
-                $model = $model->{$dataType->scope}();
+                $query = $query->{$dataType->scope}();
             }
-            $dataTypeContent = call_user_func([$model, 'findOrFail'], $id);
+            $dataTypeContent = call_user_func([$query, 'findOrFail'], $id);
             if ($dataTypeContent->deleted_at) {
                 $isSoftDeleted = true;
             }
@@ -297,24 +374,25 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
 
         if (strlen($dataType->model_name) != 0) {
             $model = app($dataType->model_name);
+            $query = $model->query();
 
             // Use withTrashed() if model uses SoftDeletes and if toggle is selected
             if ($model && in_array(SoftDeletes::class, class_uses_recursive($model))) {
-                $model = $model->withTrashed();
+                $query = $query->withTrashed();
             }
             if ($dataType->scope && $dataType->scope != '' && method_exists($model, 'scope'.ucfirst($dataType->scope))) {
-                $model = $model->{$dataType->scope}();
+                $query = $query->{$dataType->scope}();
             }
-            $dataTypeContent = call_user_func([$model, 'findOrFail'], $id);
+            $dataTypeContent = call_user_func([$query, 'findOrFail'], $id);
         } else {
             // If Model doest exist, get data from table name
             $dataTypeContent = DB::table($dataType->name)->where('id', $id)->first();
         }
 
-        $fieldNames = [];
+        $fieldNames = []; // DATASINS: Exist field names
         foreach ($dataType->editRows as $key => $row) {
             $dataType->editRows[$key]['col_width'] = isset($row->details->width) ? $row->details->width : 100;
-            $fieldNames[$dataType->editRows[$key]->field] = $dataType->editRows[$key]; // DEX: Exist field names
+            $fieldNames[$dataType->editRows[$key]->field] = $dataType->editRows[$key]; // DATASINS: Exist field names
         }
 
         // If a column has a relationship associated with it, we do not want to show that field
@@ -335,7 +413,7 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
             $view = "voyager::$slug.edit-add";
         }
 
-        return Voyager::view($view, compact('dataType', 'dataTypeContent', 'isModelTranslatable', 'fieldNames'));
+        return Voyager::view($view, compact('dataType', 'dataTypeContent', 'isModelTranslatable', 'fieldNames')); // DATASINS: added field names
     }
 
     // POST BR(E)AD
@@ -349,21 +427,33 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
         $id = $id instanceof \Illuminate\Database\Eloquent\Model ? $id->{$id->getKeyName()} : $id;
 
         $model = app($dataType->model_name);
+        $query = $model->query();
         if ($dataType->scope && $dataType->scope != '' && method_exists($model, 'scope'.ucfirst($dataType->scope))) {
-            $model = $model->{$dataType->scope}();
+            $query = $query->{$dataType->scope}();
         }
         if ($model && in_array(SoftDeletes::class, class_uses_recursive($model))) {
-            $data = $model->withTrashed()->findOrFail($id);
-        } else {
-            $data = $model->findOrFail($id);
+            $query = $query->withTrashed();
         }
+
+        $data = $query->findOrFail($id);
 
         // Check permission
         $this->authorize('edit', $data);
 
         // Validate fields with ajax
         $val = $this->validateBread($request->all(), $dataType->editRows, $dataType->name, $id)->validate();
+
+        // Get fields with images to remove before updating and make a copy of $data
+        $to_remove = $dataType->editRows->where('type', 'image')
+            ->filter(function ($item, $key) use ($request) {
+                return $request->hasFile($item->field);
+            });
+        $original_data = clone($data);
+
         $this->insertUpdateData($request, $slug, $dataType->editRows, $data);
+
+        // Delete Images
+        $this->deleteBreadImages($original_data, $to_remove);
 
         event(new BreadDataUpdated($dataType, $data));
 
@@ -405,11 +495,12 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
                             ? new $dataType->model_name()
                             : false;
 
-        $fieldNames = [];
+        $fieldNames = []; // DATASINS: Exist field names
         foreach ($dataType->addRows as $key => $row) {
             $dataType->addRows[$key]['col_width'] = $row->details->width ?? 100;
-            $fieldNames[$dataType->addRows[$key]->field] = $dataType->addRows[$key]; // DEX: Exist field names
+            $fieldNames[$dataType->addRows[$key]->field] = $dataType->addRows[$key]; // DATASINS: Exist field names
         }
+
         // If a column has a relationship associated with it, we do not want to show that field
         $this->removeRelationshipField($dataType, 'add');
 
@@ -425,7 +516,7 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
             $view = "voyager::$slug.edit-add";
         }
 
-        return Voyager::view($view, compact('dataType', 'dataTypeContent', 'isModelTranslatable', 'fieldNames'));
+        return Voyager::view($view, compact('dataType', 'dataTypeContent', 'isModelTranslatable', 'fieldNames')); // DATASINS: added fieldNames
     }
 
     /**
@@ -493,6 +584,9 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
             // Single item delete, get ID from URL
             $ids[] = $id;
         }
+
+        $affected = 0;
+
         foreach ($ids as $id) {
             $data = call_user_func([$dataType->model_name, 'findOrFail'], $id);
 
@@ -503,12 +597,19 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
             if (!($model && in_array(SoftDeletes::class, class_uses_recursive($model)))) {
                 $this->cleanup($dataType, $data);
             }
+
+            $res = $data->delete();
+
+            if ($res) {
+                $affected++;
+
+                event(new BreadDataDeleted($dataType, $data));
+            }
         }
 
-        $displayName = count($ids) > 1 ? $dataType->getTranslatedAttribute('display_name_plural') : $dataType->getTranslatedAttribute('display_name_singular');
+        $displayName = $affected > 1 ? $dataType->getTranslatedAttribute('display_name_plural') : $dataType->getTranslatedAttribute('display_name_singular');
 
-        $res = $data->destroy($ids);
-        $data = $res
+        $data = $affected
             ? [
                 'message'    => __('voyager::generic.successfully_deleted')." {$displayName}",
                 'alert-type' => 'success',
@@ -517,10 +618,6 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
                 'message'    => __('voyager::generic.error_deleting')." {$displayName}",
                 'alert-type' => 'error',
             ];
-
-        if ($res) {
-            event(new BreadDataDeleted($dataType, $data));
-        }
 
         return redirect()->route("voyager.{$dataType->slug}.index")->with($data);
     }
@@ -532,14 +629,15 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
         $dataType = Voyager::model('DataType')->where('slug', '=', $slug)->first();
 
         // Check permission
-        $this->authorize('delete', app($dataType->model_name));
+        $model = app($dataType->model_name);
+        $this->authorize('delete', $model);
 
         // Get record
-        $model = call_user_func([$dataType->model_name, 'withTrashed']);
+        $query = $model->withTrashed();
         if ($dataType->scope && $dataType->scope != '' && method_exists($model, 'scope'.ucfirst($dataType->scope))) {
-            $model = $model->{$dataType->scope}();
+            $query = $query->{$dataType->scope}();
         }
-        $data = $model->findOrFail($id);
+        $data = $query->findOrFail($id);
 
         $displayName = $dataType->getTranslatedAttribute('display_name_singular');
 
@@ -711,12 +809,8 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
         // Delete Files
         foreach ($dataType->deleteRows->where('type', 'file') as $row) {
             if (isset($data->{$row->field})) {
-                $fileList = json_decode($data->{$row->field});
-
-                if(is_object($fileList)) {
-                    foreach ($fileList as $file) {
+                foreach (json_decode($data->{$row->field}) as $file) {
                         $this->deleteFileIfExists($file->download_link);
-                    }
                 }
             }
         }
@@ -801,7 +895,7 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
         // Check permission
         $this->authorize('edit', app($dataType->model_name));
 
-        if (!isset($dataType->order_column) || !isset($dataType->order_display_column)) {
+        if (empty($dataType->order_column) || empty($dataType->order_display_column)) {
             return redirect()
             ->route("voyager.{$dataType->slug}.index")
             ->with([
@@ -811,10 +905,11 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
         }
 
         $model = app($dataType->model_name);
+        $query = $model->query();
         if ($model && in_array(SoftDeletes::class, class_uses_recursive($model))) {
-            $model = $model->withTrashed();
+            $query = $query->withTrashed();
         }
-        $results = $model->orderBy($dataType->order_column, $dataType->order_direction)->get();
+        $results = $query->orderBy($dataType->order_column, $dataType->order_direction)->get();
 
         $display_column = $dataType->order_display_column;
 
@@ -860,6 +955,10 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
 
     public function action(Request $request)
     {
+        if (!$request->action || !class_exists($request->action)) {
+            throw new \Exception("Action {$request->action} doesn't exist or has not been defined");
+        }
+
         $slug = $this->getSlug($request);
         $dataType = Voyager::model('DataType')->where('slug', '=', $slug)->first();
 
@@ -893,7 +992,6 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
         $this->authorize($method, $model);
 
         $rows = $dataType->{$method.'Rows'};
-
         foreach ($rows as $key => $row) {
             if ($row->field === $request->input('type')) {
                 $options = $row->details;
@@ -907,14 +1005,14 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
                     $model = $model->{$options->scope}();
                 }
 
-                $relationshipListMethod = \Illuminate\Support\Str::camel($options->column) . 'List'; // DEX: for recursive categories
-                if (method_exists($model, $relationshipListMethod)) {
-                    $total_count = $model->count();
-                    $relationshipOptions = $model->$relationshipListMethod();
+                $relationshipListMethod = \Illuminate\Support\Str::camel($options->column) . 'List'; // DATASINS: for recursive categories
+                if (method_exists($model, $relationshipListMethod)) { // DATASINS: for recursive categories
+                    $total_count = $model->count(); // DATASINS: for recursive categories
+                    $relationshipOptions = $model->$relationshipListMethod(); // DATASINS: for recursive categories
                 } else if ($search) { // If search query, use LIKE to filter results depending on field label
                     // If we are using additional_attribute as label
                     if (in_array($options->label, $additional_attributes)) {
-                        $relationshipOptions = $model->all();
+                        $relationshipOptions = $model->get();
                         $relationshipOptions = $relationshipOptions->filter(function ($model) use ($search, $options) {
                             return stripos($model->{$options->label}, $search) !== false;
                         });
@@ -967,5 +1065,40 @@ class BrowseController extends \TCG\Voyager\Http\Controllers\VoyagerBaseControll
 
         // No result found, return empty array
         return response()->json([], 404);
+    }
+
+    protected function findSearchableRelationshipRow($relationshipRows, $searchKey)
+    {
+        return $relationshipRows->filter(function ($item) use ($searchKey) {
+            if ($item->details->column != $searchKey) {
+                return false;
+            }
+            if ($item->details->type != 'belongsTo') {
+                return false;
+            }
+
+            return !$this->relationIsUsingAccessorAsLabel($item->details);
+        })->first();
+    }
+
+    protected function getSortableColumns($rows)
+    {
+        return $rows->filter(function ($item) {
+            if ($item->type != 'relationship') {
+                return true;
+            }
+            if ($item->details->type != 'belongsTo') {
+                return false;
+            }
+
+            return !$this->relationIsUsingAccessorAsLabel($item->details);
+        })
+        ->pluck('field')
+        ->toArray();
+    }
+
+    protected function relationIsUsingAccessorAsLabel($details)
+    {
+        return in_array($details->label, app($details->model)->additional_attributes ?? []);
     }
 }

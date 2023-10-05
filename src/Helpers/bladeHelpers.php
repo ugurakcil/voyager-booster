@@ -35,8 +35,7 @@ if (!function_exists('afterImageName')) {
 }
 
 if (!function_exists('strupper')) {
-    function strupper($text)
-    {
+    function strupper($text) {
         if (app()->getLocale() == 'tr')
             return Transliterator::create('tr-Upper')->transliterate($text);
 
@@ -45,8 +44,7 @@ if (!function_exists('strupper')) {
 }
 
 if (!function_exists('strlower')) {
-    function strlower($text)
-    {
+    function strlower($text) {
         if (app()->getLocale() == 'tr')
             return Transliterator::create('tr-Lower')->transliterate($text);
 
@@ -55,8 +53,7 @@ if (!function_exists('strlower')) {
 }
 
 if (!function_exists('strtitle')) {
-    function strtitle($text)
-    {
+    function strtitle($text) {
         if (app()->getLocale() == 'tr')
             return Transliterator::create('tr-Title')->transliterate($text);
 
@@ -65,8 +62,7 @@ if (!function_exists('strtitle')) {
 }
 
 if (!function_exists('numberLocalization')) {
-    function numberLocalization($numbers, $from, $to)
-    {
+    function numberLocalization($numbers, $from, $to) {
         $numberSeries = [
             'en' => ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
             'ar' => ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'],
@@ -87,8 +83,7 @@ if (!function_exists('numberLocalization')) {
 }
 
 if (!function_exists('phoneNumberFormat')) {
-    function phoneNumberFormat($phoneNumber, $lang = 'en')
-    {
+    function phoneNumberFormat($phoneNumber, $lang = 'en') {
         if($lang == 'ar') {
             // The direction of the text is distorted as it goes from number to text. Don't format it!
             // $formattedPhoneNumber = preg_replace('~(.*)([\p{Arabic}]{3})[^\p{Arabic}]{0,7}
@@ -106,16 +101,14 @@ if (!function_exists('phoneNumberFormat')) {
 }
 
 if (!function_exists('localizatedPhoneNumberFormat')) {
-    function localizatedPhoneNumberFormat($phoneNumber, $from, $to)
-    {
+    function localizatedPhoneNumberFormat($phoneNumber, $from, $to) {
         $localizatedPhoneNumber = numberLocalization($phoneNumber, $from, $to);
         return phoneNumberFormat($localizatedPhoneNumber, $to);
     }
 }
 
 if (!function_exists('bulkListExplode')) {
-    function bulkListExplode($bulkListRaw)
-    {
+    function bulkListExplode($bulkListRaw) {
         $bulkListSeries = [];
 
         $bulkListRaw = rtrim($bulkListRaw, '¶¶¶');
@@ -131,4 +124,29 @@ if (!function_exists('bulkListExplode')) {
     }
 }
 
+if (!function_exists('piri')) {
+    function piri($name, $parameters = []) {
+        // Parametreler içerisinde 'locale' var mı kontrol et
+        $lang = $parameters['lang'] ?? app()->getLocale();
 
+        // 'locale' parametresini array'den kaldır
+        if(!\Config::get('app.multidomain')) {
+            return url(route($name, $parameters, false));
+        }
+
+        unset($parameters['lang']);
+
+        // Mevcut isteğin protokolünü tespit et (HTTP veya HTTPS)
+        $protocol = request()->secure() ? 'https' : 'http';
+
+        // Doğru domaini bul
+        $domain = \Config::get('app.available_locales')[$lang] ?? null;
+        if(!$domain) {
+            return url(route($name, $parameters, false));
+        }
+
+        // İstenilen rota için tam URL'yi oluştur
+        $path = ltrim(route($name, $parameters, false), '/');
+        return "{$protocol}://{$domain}/{$path}";
+    }
+}

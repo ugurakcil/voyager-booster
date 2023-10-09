@@ -36,8 +36,9 @@ if (!function_exists('afterImageName')) {
 
 if (!function_exists('strupper')) {
     function strupper($text) {
-        if (app()->getLocale() == 'tr')
-            return Transliterator::create('tr-Upper')->transliterate($text);
+        if (app()->getLocale() == 'tr') {
+            return str_replace(['ı', 'i'], ['I', 'İ'], mb_strtoupper($text, 'UTF-8'));
+        }
 
         return mb_convert_case($text, MB_CASE_UPPER, "UTF-8");
     }
@@ -45,8 +46,9 @@ if (!function_exists('strupper')) {
 
 if (!function_exists('strlower')) {
     function strlower($text) {
-        if (app()->getLocale() == 'tr')
-            return Transliterator::create('tr-Lower')->transliterate($text);
+        if (app()->getLocale() == 'tr') {
+            return str_replace(['I', 'İ'], ['ı', 'i'], mb_strtolower($text, 'UTF-8'));
+        }
 
         return mb_convert_case($text, MB_CASE_LOWER, "UTF-8");
     }
@@ -54,8 +56,16 @@ if (!function_exists('strlower')) {
 
 if (!function_exists('strtitle')) {
     function strtitle($text) {
-        if (app()->getLocale() == 'tr')
-            return Transliterator::create('tr-Title')->transliterate($text);
+        if (app()->getLocale() == 'tr') {
+            $words = explode(' ', $text);
+            $newWords = [];
+
+            foreach ($words as $word) {
+                $newWords[] = strupper(mb_substr($word, 0, 1)) . strlower(mb_substr($word, 1));
+            }
+
+            return implode(' ', $newWords);
+        }
 
         return mb_convert_case($text, MB_CASE_TITLE, "UTF-8");
     }
@@ -143,6 +153,11 @@ if (!function_exists('piri')) {
         $domain = \Config::get('app.available_locales')[$lang] ?? null;
         if(!$domain) {
             return url(route($name, $parameters, false));
+        }
+
+        // Eğer domain bir subdomain değilse ve www içermiyorsa, önüne www ekleyin
+        if (strpos($domain, 'www.') === false && substr_count($domain, '.') === 1) {
+            $domain = "www." . $domain;
         }
 
         // İstenilen rota için tam URL'yi oluştur

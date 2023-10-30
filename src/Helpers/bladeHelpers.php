@@ -136,15 +136,22 @@ if (!function_exists('bulkListExplode')) {
 
 if (!function_exists('piri')) {
     function piri($name, $parameters = []) {
-        // Parametreler içerisinde 'locale' var mı kontrol et
-        $lang = $parameters['lang'] ?? app()->getLocale();
-
-        // 'locale' parametresini array'den kaldır
+        // Tüm diller tek domain üzerinde yer alıyorsa
+        // route'u direkt olarak oluştur
         if(!\Config::get('app.multidomain')) {
             return url(route($name, $parameters, false));
         }
 
-        unset($parameters['lang']);
+        // Mevcut dili tanımla
+        $lang = app()->getLocale();
+
+        // Özel bir lang talep edildiyse değiştirir
+        // Ardından parametre listesinden kaldırır
+        // Çünkü multidomain'de lang parametresine ihtiyaç yok
+        if(isset($parameters['lang'])) {
+            $lang = $parameters['lang'];
+            unset($parameters['lang']);
+        }
 
         // Mevcut isteğin protokolünü tespit et (HTTP veya HTTPS)
         $protocol = request()->secure() ? 'https' : 'http';
@@ -153,11 +160,6 @@ if (!function_exists('piri')) {
         $domain = \Config::get('app.available_locales')[$lang] ?? null;
         if(!$domain) {
             return url(route($name, $parameters, false));
-        }
-
-        // Eğer domain bir subdomain değilse ve www içermiyorsa, önüne www ekleyin
-        if (strpos($domain, 'www.') === false && substr_count($domain, '.') === 1) {
-            $domain = "www." . $domain;
         }
 
         // İstenilen rota için tam URL'yi oluştur

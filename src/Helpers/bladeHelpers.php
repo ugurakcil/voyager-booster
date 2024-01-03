@@ -1,8 +1,7 @@
 <?php
 if (!function_exists('localizedDate')) {
-    function localizedDate($date, $format) {
-        $newDate = new Carbon\Carbon;
-        echo $newDate->isoFormat('D MMMM YYYY dddd');
+    function localizedDate($date, $format = 'd F Y l') {
+        echo (new Carbon\Carbon)::parse($date)->format('d F Y l'); // 'D MMMM YYYY dddd
     }
 }
 
@@ -136,22 +135,15 @@ if (!function_exists('bulkListExplode')) {
 
 if (!function_exists('piri')) {
     function piri($name, $parameters = []) {
-        // Tüm diller tek domain üzerinde yer alıyorsa
-        // route'u direkt olarak oluştur
+        // Parametreler içerisinde 'locale' var mı kontrol et
+        $lang = $parameters['lang'] ?? app()->getLocale();
+
+        // 'locale' parametresini array'den kaldır
         if(!\Config::get('app.multidomain')) {
             return url(route($name, $parameters, false));
         }
 
-        // Mevcut dili tanımla
-        $lang = app()->getLocale();
-
-        // Özel bir lang talep edildiyse değiştirir
-        // Ardından parametre listesinden kaldırır
-        // Çünkü multidomain'de lang parametresine ihtiyaç yok
-        if(isset($parameters['lang'])) {
-            $lang = $parameters['lang'];
-            unset($parameters['lang']);
-        }
+        unset($parameters['lang']);
 
         // Mevcut isteğin protokolünü tespit et (HTTP veya HTTPS)
         $protocol = request()->secure() ? 'https' : 'http';
@@ -162,8 +154,27 @@ if (!function_exists('piri')) {
             return url(route($name, $parameters, false));
         }
 
+        // Eğer domain bir subdomain değilse ve www içermiyorsa, önüne www ekleyin
+        if (strpos($domain, 'www.') === false && substr_count($domain, '.') === 1) {
+            $domain = "www." . $domain;
+        }
+
         // İstenilen rota için tam URL'yi oluştur
         $path = ltrim(route($name, $parameters, false), '/');
         return "{$protocol}://{$domain}/{$path}";
+    }
+}
+
+if (!function_exists('cleanContent')) {
+    function cleanContent($content) {
+        $content = html_entity_decode($content);
+        $content = strip_tags($content);
+        return trim($content, "\t\n\r\0\x0B\xC2\xA0");
+    }
+}
+
+if (!function_exists('existsContent')) {
+    function existsContent($content) {
+        return !!strlen(cleanContent($content));
     }
 }
